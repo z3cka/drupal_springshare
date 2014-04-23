@@ -1,0 +1,191 @@
+<?php
+
+// TODO: setup cron
+// TODO: have cron only update a certain number of lids
+
+// TODO: provide data for the Today's hours block
+// expose times to views
+// filter on today's date
+// show building name, w/ link (if link is available)
+// show time span(s)
+
+function libcal_hours_menu() {
+	$items = array();
+	$items['libcal'] = array(
+	  'title' => 'TEST LibCal Hours',
+	  'page callback' => 'libcal_hours_test',
+	  'access callback' => TRUE,
+	  'type' => MENU_CALLBACK
+	);
+	return $items;
+}
+
+function libcal_hours_test() {
+	$data = libcal_hours_fetch();
+	if ($data) {
+	  libcal_hours_parse($data);
+	}
+	else {
+		// TODO: set a real watchdog message
+		drupal_set_message('something went wrong', 'error');
+		dpm($data);
+	}
+	return '<p>Hello world.</p>';
+}
+
+function libcal_hours_fetch() {
+	module_load_include('inc', 'aggregator', 'aggregator.fetcher');
+	$feed = new stdClass();
+	// TODO: load the iid and number of weeks from separate functions
+	// TODO: build the URL from the iid and number of weeks
+	/*
+	 * there is a crucial line missing here because it contained site-specific data
+	 * this will be replaced soon when the two TODOs above are completed
+	 */
+	$data = array();
+	if (aggregator_aggregator_fetch($feed)) {
+		$data = drupal_json_decode($feed->source_string);
+	}
+	else {
+		// TODO: set a real watchdog message
+		drupal_set_message('something went wrong', 'error');
+		dpm($feed);
+	}
+	return $data;
+}
+
+function libcal_hours_parse($data) {
+	// loop through locations
+	// LATER: make sure that $data['locations'] is an array
+	foreach ($data['locations'] as $location) {
+	  libcal_hours_parse_location($location);
+	}
+}
+
+function libcal_hours_parse_location($location) {
+	$node = new stdClass();
+	$lid = $location['lid'];
+	// see if a node with this lid already exists
+	$query = new EntityFieldQuery();
+	$query->entityCondition('entity_type', 'node')
+	  ->entityCondition('bundle', 'libcal_hours_location')
+	  ->fieldCondition('libcal_hours_lid', 'value', $lid);
+	$result = $query->execute();
+	// LATER: there is probably a cleaner way to get just one node
+	if (isset($result['node'])) {
+	  $nids = array_keys($result['node']);
+	  $nodes = entity_load('node', $nids);
+	  $node = array_shift($nodes);
+	} else {
+		$node->type = 'libcal_hours_location';
+		node_object_prepare($node);
+	}
+	// LATER: set the language correctly
+	// https://api.drupal.org/api/drupal/modules%21field%21field.multilingual.inc/function/field_language/7
+	$node->libcal_hours_lid[LANGUAGE_NONE][0]['value'] = $lid;
+	$node->title = $location['name'];
+	$node->libcal_hours_category[LANGUAGE_NONE][0]['value'] = $location['category'];
+	$node->libcal_hours_url[LANGUAGE_NONE][0]['url'] = $location['url'];
+  // LATER: desc
+  // LATER: contact
+  // LATER: fn (if category == 'library')
+  // LATER: lat
+  // LATER: long
+  // LATER: color
+	node_save($node);
+	$location['nid'] = $node->nid;
+	libcal_hours_parse_days($location);
+}
+
+function libcal_hours_parse_days($location) {
+	$nid = $location['nid'];
+  // loop through weeks
+	foreach ($location['weeks'] as $week) {
+	  // loop through days
+	  foreach ($week as $day_name => $day_data) {
+	    // get date
+	    $date_text = $day_data['date'];
+	    $date = strtotime($date_text);
+	    // store status at the date level
+	    $status = $day_data['times']['status'];
+	    // store note at the date level
+	    $note = '';
+	    if (!empty($day_data['times']['note'])) {
+	    	$note = $day_data['times']['note'];
+	    }
+	    $fields = array(
+	      'nid' => $nid,
+	      'date' => $date,
+	      'status' => $status,
+	      'note' => $note
+	    );
+	    $did = 0;
+	    if ($did = libcal_hours_get_did($nid, $date)) {
+	    	$fields['did'] = $did;
+	      // save update
+	    	drupal_write_record('libcal_hours_date', $fields, 'did');
+	    } else {
+	    	drupal_write_record('libcal_hours_date', $fields);
+	    	// we need the new did
+	    	$did = libcal_hours_get_did($nid, $date);
+	    }
+	    $day_data['did'] = $did;
+	    libcal_hours_parse_times($day_data);
+	  }
+	}
+}
+
+function libcal_hours_parse_times($day_data) {
+	$did = $day_data['did'];
+	// there isn't anything unique in the incoming data
+	// that we can use for lookup,
+	// so we have to delete all existing and reload
+	db_delete('libcal_hours_time')
+	  ->condition('did', $did)
+	  ->execute();
+	if (!empty($day_data['times']['hours'])) {
+		$date_text = $day_data['date'];
+		// loop through hours
+		foreach ($day_data['times']['hours'] as $span) {
+			// store from and to
+			$from_text = $date_text . ' ' . $span['from'];
+			$to_text = $date_text . ' ' . $span['to'];
+			$fields = array(
+			  'did' => $did,
+			  'from_time' => strtotime($from_text),
+			  'to_time' => strtotime($to_text),
+			);
+			drupal_write_record('libcal_hours_time', $fields);
+		}
+	}
+}
+
+function libcal_hours_get_did($nid, $date) {
+  $query = db_select('libcal_hours_date', 'd')
+    ->condition('d.nid', $nid)
+    ->condition('d.date', $date)
+    ->fields('d', array('did'));
+  $result = $query->execute();
+  return $result->fetchField();
+}
+
+function libcal_hours_get_hid() {
+	
+}
+
+function libcal_hours_node_info() {
+  return array(
+    'libcal_hours_location' => array(
+      'name' => t('LibCal Hours Location'),
+      'base' => 'libcal_hours',
+      'description' => t('Location Information pulled from LibCal Hours.'),
+      'has_title' => TRUE,
+      'title_label' => 'Location Name',
+      'locked' => TRUE,
+    ),
+  );
+}
+
+function libcal_hours_form($node, $form_state) {
+  return node_content_form($node, $form_state);
+}

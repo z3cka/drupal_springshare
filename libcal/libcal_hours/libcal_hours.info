@@ -1,0 +1,9 @@
+name = LibCal Hours
+description = Support for LibCal Hours 
+package = Springshare
+core = 7.x
+files[] = libcal_hours.module
+files[] = libcal_hours.install
+
+dependencies[] = number
+dependencies[] = link

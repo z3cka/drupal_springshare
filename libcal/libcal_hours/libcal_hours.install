@@ -1,0 +1,167 @@
+<?php
+
+function libcal_hours_install() {
+	node_types_rebuild();
+	// LATER: build these with features
+	foreach (_libcal_hours_installed_fields() as $field) {
+		field_create_field($field);
+	}
+	foreach (_libcal_hours_installed_instances() as $instance) {
+		$instance['entity_type'] = 'node';
+		$instance['bundle'] = 'libcal_hours_location';
+		field_create_instance($instance);
+	}
+}
+
+function _libcal_hours_installed_fields() {
+	// TODO: add 'locked' => TRUE to each?
+  return array(
+    'libcal_hours_lid' => array(
+      'field_name' => 'libcal_hours_lid',
+      'cardinality' => 1,
+      'type'        => 'number_integer',
+    ),
+    'libcal_hours_category' => array(
+      'field_name'  => 'libcal_hours_category',
+      'cardinality' => 1,
+      'type'        => 'text',
+    ),
+    'libcal_hours_url' => array(
+      'field_name' => 'libcal_hours_url',
+      'type'       => 'link_field',
+      'cardinality' => 1,
+    ),
+  );
+}
+
+function _libcal_hours_installed_instances() {
+  return array(
+    'libcal_hours_lid' => array(
+      'field_name' => 'libcal_hours_lid',
+      'label'       => t('Location ID'),
+      'required' => TRUE,
+      'widget'      => array(
+        'type'    => 'number',
+      ),
+    ),
+    'libcal_hours_category' => array(
+      'field_name'  => 'libcal_hours_category',
+      'label' => t('Location Category'),
+      'widget'      => array(
+        'type'    => 'text_textfield',
+      ),
+    ),
+    'libcal_hours_url' => array(
+      'field_name'  => 'libcal_hours_url',
+      'label'       => t('Location URL'),
+      'widget'      => array(
+        'type'    => 'link_field',
+      ),
+    ),
+  );
+}
+
+function libcal_hours_schema() {
+  $schema = array();
+
+  $schema['libcal_hours_date'] = array(
+    'description' => 'Information about one whole day for one location.',
+    'fields' => array(
+      'did' => array(
+        'description' => 'The unique identifier for this day.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'nid' => array(
+        'description' => 'The node id for the location.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'date' => array(
+        'description' => 'Timestamp for the date.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'status' => array(
+        'description' => 'The status code for this day at this location.',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => FALSE,
+      ),
+      'note' => array(
+        'description' => 'An optional note for this day at this location.',
+        'type' => 'text',
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('did'),
+    'unique keys' => array(
+      'nid_date' => array('nid', 'date'),
+    ),
+  );
+  
+  $schema['libcal_hours_time'] = array(
+    'description' => 'Times for one day at one location.',
+    'fields' => array(
+      'did' => array(
+        'description' => 'The ID for the day/location.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'from_time' => array(
+        'description' => 'Timestamp for starting time.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'to_time' => array(
+        'description' => 'Timestamp for ending time.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'foreign keys' => array(
+      'libcal_hours_date' => array(
+        'table' => 'libcal_hours_date',
+        'columns' => array('did' => 'did'),
+       ),
+    ),
+  );
+
+  return $schema;
+}
+
+function libcal_hours_uninstall() {
+	// Gather all the content that might have been created while this
+	// module was enabled.
+	$sql = 'SELECT nid FROM {node} n WHERE n.type = :type';
+	$result = db_query($sql, array(':type' => 'libcal_hours_location'));
+	$nids = array();
+	foreach ($result as $row) {
+		$nids[] = $row->nid;
+	}
+	// Delete all the nodes at once
+	node_delete_multiple($nids);
+	// Loop over each of the fields defined by this module and delete
+	// all instances of the field, their data, and the field itself.
+	foreach (array_keys(_libcal_hours_installed_fields()) as $field) {
+		field_delete_field($field);
+	}
+	// Loop over any remaining field instances attached to the job_post
+	// content type (such as the body field) and delete them individually.
+	$instances = field_info_instances('node', 'libcal_hours_location');
+	foreach ($instances as $instance_name => $instance) {
+	  field_delete_instance($instance);
+	}
+	// Delete our content type
+	node_type_delete('libcal_hours_location');
+	// Purge all field infromation
+	field_purge_batch(1000);
+}

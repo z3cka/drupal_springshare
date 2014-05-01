@@ -1,65 +1,92 @@
 <?php
 
-// TODO: setup cron
-// TODO: have cron only update a certain number of lids
-
-// TODO: provide data for the Today's hours block
-// expose times to views
-// filter on today's date
-// show building name, w/ link (if link is available)
-// show time span(s)
+// currently LibCal will only let you load 20 weeks worth of data
+define('LIBCAL_HOURS_MAX_WEEKS', 20);
 
 function libcal_hours_menu() {
-	$items = array();
-	$items['libcal'] = array(
-	  'title' => 'TEST LibCal Hours',
-	  'page callback' => 'libcal_hours_test',
-	  'access callback' => TRUE,
-	  'type' => MENU_CALLBACK
-	);
-	return $items;
+  $items = array();
+  $items['admin/springshare/libcal/hours'] = array(
+    'title' => 'LibCal hours settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('libcal_hours_admin'),
+    // TODO: implement permissions
+    'access arguments' => array('administer libcal hours settings'),
+    'type' => MENU_NORMAL_ITEM,
+   );
+  return $items;
 }
 
-function libcal_hours_test() {
+function libcal_hours_admin() {
+  $form = array();
+  $form['libcal_hours_iid'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Libcal IID'),
+    '#default_value' => variable_get('libcal_hours_iid'),
+    '#size' => 4,
+    '#maxlength' => 5,
+    '#element_validate' => array('element_validate_integer_positive'),
+    '#required' => TRUE,
+  );
+  return system_settings_form($form);
+}
+
+// LATER: have cron only update a certain number of lids?
+function libcal_hours_cron() {
 	$data = libcal_hours_fetch();
 	if ($data) {
-	  libcal_hours_parse($data);
+	  // LATER: make sure that $data['locations'] is an array?
+		$queue = DrupalQueue::get('parse_locations');
+	  foreach ($data['locations'] as $location) {
+	    $queue->createItem($location);
+	  }
 	}
 	else {
-		// TODO: set a real watchdog message
-		drupal_set_message('something went wrong', 'error');
+		watchdog('libcal', 'There was something wrong with the JSON data from LibCal.', array(), WATCHDOG_ERROR);
 		dpm($data);
 	}
-	return '<p>Hello world.</p>';
+}
+
+function libcal_hours_cron_queue_info() {
+	$queues['parse_locations'] = array(
+	  'worker callback' => 'libcal_hours_parse_location',
+	  'time' => 240
+	);
+	return $queues;
+}
+// TODO: show notes, status messages
+
+function libcal_hours_views_api() {
+  return array(
+    'api' => 3,
+  );
+}
+
+function libcal_hours_get_iid() {
+	return variable_get('libcal_hours_iid');
+}
+
+// later, we might allow each site to configure how many weeks to load
+function libcal_hours_max_weeks() {
+	return LIBCAL_HOURS_MAX_WEEKS;
 }
 
 function libcal_hours_fetch() {
 	module_load_include('inc', 'aggregator', 'aggregator.fetcher');
 	$feed = new stdClass();
-	// TODO: load the iid and number of weeks from separate functions
-	// TODO: build the URL from the iid and number of weeks
-	/*
-	 * there is a crucial line missing here because it contained site-specific data
-	 * this will be replaced soon when the two TODOs above are completed
-	 */
+	$iid = libcal_hours_get_iid();
+	// TODO: throw a wobbly if no IID is set
+	$max_weeks = libcal_hours_max_weeks();
+  $feed->url = 'http://api.libcal.com/api_hours_grid.php?iid=' . $iid . '&format=json&weeks=' . $max_weeks;
+  watchdog('libcal', $feed->url, array(), WATCHDOG_DEBUG);
 	$data = array();
 	if (aggregator_aggregator_fetch($feed)) {
 		$data = drupal_json_decode($feed->source_string);
 	}
 	else {
-		// TODO: set a real watchdog message
-		drupal_set_message('something went wrong', 'error');
+		watchdog('libcal', 'Unable to fetch feed from LibCal.', array(), WATCHDOG_ERROR);
 		dpm($feed);
 	}
 	return $data;
-}
-
-function libcal_hours_parse($data) {
-	// loop through locations
-	// LATER: make sure that $data['locations'] is an array
-	foreach ($data['locations'] as $location) {
-	  libcal_hours_parse_location($location);
-	}
 }
 
 function libcal_hours_parse_location($location) {
@@ -95,9 +122,11 @@ function libcal_hours_parse_location($location) {
 	node_save($node);
 	$location['nid'] = $node->nid;
 	libcal_hours_parse_days($location);
+	// watchdog('libcal', "Updated Libcal Hours Location: %title", array('%title' => $node->title), WATCHDOG_INFO);
 }
 
 function libcal_hours_parse_days($location) {
+// dpm($location);
 	$nid = $location['nid'];
   // loop through weeks
 	foreach ($location['weeks'] as $week) {
@@ -167,10 +196,6 @@ function libcal_hours_get_did($nid, $date) {
     ->fields('d', array('did'));
   $result = $query->execute();
   return $result->fetchField();
-}
-
-function libcal_hours_get_hid() {
-	
 }
 
 function libcal_hours_node_info() {

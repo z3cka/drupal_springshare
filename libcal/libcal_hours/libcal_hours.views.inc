@@ -17,7 +17,7 @@ function libcal_hours_views_data() {
 	);
 	// location date field
 	$data['libcal_hours_date']['date'] = array(
-	  'title' => t('Location Date'),
+	  'title' => t('Location date'),
 	  'help' => t('One date for one location'),
 	  'field' => array(
 	    'handler' => 'views_handler_field_date',
@@ -27,6 +27,34 @@ function libcal_hours_views_data() {
 	  ),
 	  'filter' => array(
 	    'handler' => 'views_handler_filter_date',
+	  ),
+	);
+	// status field
+	$data['libcal_hours_date']['status'] = array(
+	  'title' => t('Location date status'),
+	  'help' => t('The status for one date at one location'),
+	  'field' => array(
+	    'handler' => 'views_handler_field',
+	  ),
+	  'sort' => array(
+	    'handler' => 'views_handler_sort',
+	  ),
+	  'filter' => array(
+	    'handler' => 'views_handler_filter',
+	  ),
+	);
+	// note field
+	$data['libcal_hours_date']['note'] = array(
+	  'title' => t('Location date note'),
+	  'help' => t('The note for date at one location'),
+	  'field' => array(
+	    'handler' => 'views_handler_field',
+	  ),
+	  'sort' => array(
+	    'handler' => 'views_handler_sort',
+	  ),
+	  'filter' => array(
+	    'handler' => 'views_handler_filter',
 	  ),
 	);
 	// time spans

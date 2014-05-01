@@ -2,7 +2,7 @@
 
 function libcal_hours_install() {
 	node_types_rebuild();
-	// LATER: build these with features
+	// TODO: build these with features to see what else should be set
 	foreach (_libcal_hours_installed_fields() as $field) {
 		field_create_field($field);
 	}

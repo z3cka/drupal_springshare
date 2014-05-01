@@ -3,14 +3,21 @@
 // currently LibCal will only let you load 20 weeks worth of data
 define('LIBCAL_HOURS_MAX_WEEKS', 20);
 
+function libcal_hours_permission() {
+	return array(
+	  'administer libcal hours' => array(
+	    'title' => t('Administer LibCal Hours'),
+	  ),
+	);
+}
+
 function libcal_hours_menu() {
   $items = array();
   $items['admin/springshare/libcal/hours'] = array(
     'title' => 'LibCal hours settings',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('libcal_hours_admin'),
-    // TODO: implement permissions
-    'access arguments' => array('administer libcal hours settings'),
+    'access arguments' => array('administer libcal hours'),
     'type' => MENU_NORMAL_ITEM,
    );
   return $items;
@@ -53,7 +60,6 @@ function libcal_hours_cron_queue_info() {
 	);
 	return $queues;
 }
-// TODO: show notes, status messages
 
 function libcal_hours_views_api() {
   return array(
@@ -122,7 +128,6 @@ function libcal_hours_parse_location($location) {
 	node_save($node);
 	$location['nid'] = $node->nid;
 	libcal_hours_parse_days($location);
-	// watchdog('libcal', "Updated Libcal Hours Location: %title", array('%title' => $node->title), WATCHDOG_INFO);
 }
 
 function libcal_hours_parse_days($location) {
@@ -136,6 +141,7 @@ function libcal_hours_parse_days($location) {
 	    $date_text = $day_data['date'];
 	    $date = strtotime($date_text);
 	    // store status at the date level
+	    // LATER: write to log if status == 'not-set'?
 	    $status = $day_data['times']['status'];
 	    // store note at the date level
 	    $note = '';
@@ -199,6 +205,7 @@ function libcal_hours_get_did($nid, $date) {
 }
 
 function libcal_hours_node_info() {
+	// TODO: make sure that this is not promoted to front page by default
   return array(
     'libcal_hours_location' => array(
       'name' => t('LibCal Hours Location'),

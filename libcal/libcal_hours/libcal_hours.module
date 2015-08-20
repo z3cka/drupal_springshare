@@ -25,6 +25,15 @@ function libcal_hours_menu() {
 
 function libcal_hours_admin() {
   $form = array();
+  $form['libcal_hours_api'] = array(
+    '#title' => t('Libcal API Version'),
+    '#default_value' => variable_get('libcal_hours_api'),
+    '#size' => 4,
+    '#maxlength' => 5,
+    '#element_validate' => array('element_validate_integer_positive'),
+    '#required' => TRUE,
+    '#type' => 'textfield',
+  );
   $form['libcal_hours_iid'] = array(
     '#type' => 'textfield',
     '#title' => t('Libcal IID'),
@@ -79,10 +88,11 @@ function libcal_hours_max_weeks() {
 function libcal_hours_fetch() {
 	module_load_include('inc', 'aggregator', 'aggregator.fetcher');
 	$feed = new stdClass();
+	$libcal_hours_api = variable_get('libcal_hours_api');
 	$iid = libcal_hours_get_iid();
 	// TODO: throw a wobbly if no IID is set
 	$max_weeks = libcal_hours_max_weeks();
-  $feed->url = 'http://api.libcal.com/api_hours_grid.php?iid=' . $iid . '&format=json&weeks=' . $max_weeks;
+  $feed->url = 'http://api' . $libcal_hours_api . '.libcal.com/api_hours_grid.php?iid=' . $iid . '&format=json&weeks=' . $max_weeks;
   watchdog('libcal', $feed->url, array(), WATCHDOG_DEBUG);
 	$data = array();
 	if (aggregator_aggregator_fetch($feed)) {
